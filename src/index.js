@@ -11,6 +11,7 @@ import { generateContentForProspect } from "./content/index.js";
 import { generateVisualsForProspect, pollPendingVideo } from "./visuals/index.js";
 import { routeVideoModel } from "./visuals/router.js";
 import { ingestProspect } from "./ghl/ingest.js";
+import { runBatch } from "./batch/index.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -280,6 +281,24 @@ async function runPollVideo(argv) {
   console.log(`[poll-video] Done. URL: ${result.url}`);
 }
 
+async function runBatchCmd(argv) {
+  const flags = parseFlags(argv);
+  if (!flags.input || !flags["campaign-id"]) {
+    throw new Error(
+      `Missing flags. Usage:\n  node src/index.js batch --input <prospects.csv|.json> --campaign-id <id> [--concurrency 3] [--steps research,content,visuals,ingest] [--force] [--live-ingest]`,
+    );
+  }
+  const steps = flags.steps ? flags.steps.split(",").map((s) => s.trim()) : undefined;
+  await runBatch({
+    inputPath: flags.input,
+    campaignId: flags["campaign-id"],
+    steps,
+    concurrency: flags.concurrency ? Number(flags.concurrency) : 3,
+    force: !!flags.force,
+    dryIngest: !flags["live-ingest"],
+  });
+}
+
 async function runIngest(argv) {
   const flags = parseFlags(argv);
   if (!flags["campaign-id"] || !flags.slug) {
@@ -352,7 +371,10 @@ async function main() {
   node src/index.js route-video --prompt "<text>" [--intent ...]
                                           Test the video model router (no generation)
   node src/index.js ingest --campaign-id <id> --slug <prospect-slug> [--live]
-                                          Push a prospect's artifacts into GHL (dry-run by default, Session 4)`,
+                                          Push a prospect's artifacts into GHL (dry-run by default, Session 4)
+  node src/index.js batch --input <prospects.csv|.json> --campaign-id <id>
+                          [--concurrency 3] [--steps research,content,visuals,ingest] [--force] [--live-ingest]
+                                          Run all sessions over a list of prospects (Session 5)`,
     );
     process.exit(1);
   }
@@ -389,6 +411,11 @@ async function main() {
 
   if (cmd === "ingest") {
     await runIngest(rest);
+    return;
+  }
+
+  if (cmd === "batch") {
+    await runBatchCmd(rest);
     return;
   }
 
