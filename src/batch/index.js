@@ -15,13 +15,35 @@ function slugify(s) {
 
 // --- Input parsing ---
 
+// CSV parser that handles quoted fields containing commas, escaped quotes
+// (""), and CRLF/LF line endings — the minimum a real-world prospect list
+// needs ("Williams Comfort Air, Inc." is a real Indianapolis HVAC company).
+function parseCSVLine(line) {
+  const cells = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === ',') { cells.push(cur); cur = ""; }
+      else if (ch === '"' && cur === "") { inQuotes = true; }
+      else { cur += ch; }
+    }
+  }
+  cells.push(cur);
+  return cells.map((c) => c.trim());
+}
+
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
-  const header = lines[0].split(",").map((h) => h.trim());
+  const header = parseCSVLine(lines[0]);
   return lines.slice(1).map((line) => {
-    // simple CSV — no embedded commas / quotes handled
-    const cells = line.split(",").map((c) => c.trim());
+    const cells = parseCSVLine(line);
     const row = {};
     header.forEach((h, i) => (row[h] = cells[i]));
     return row;
@@ -85,7 +107,12 @@ async function runWithConcurrency(items, limit, taskFn) {
       try {
         results[idx] = await taskFn(items[idx], idx);
       } catch (err) {
-        results[idx] = { __error: err };
+        // Use the same shape the per-prospect lambda uses on failure so the
+        // manifest's `failed` counter (which reads r.error) sees this too.
+        // This is a belt-and-suspenders fallback — the lambda has its own
+        // try/catch — but if anyone refactors and removes that, errors
+        // still surface correctly instead of becoming invisible.
+        results[idx] = { slug: null, company: null, error: err.message || String(err) };
       }
     }
   }

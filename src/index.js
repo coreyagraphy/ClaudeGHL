@@ -276,11 +276,24 @@ async function runVisuals(argv) {
 async function runPollVideo(argv) {
   const flags = parseFlags(argv);
   if (!flags["job-id"]) {
-    throw new Error(`Missing --job-id. Usage:\n  node src/index.js poll-video --job-id <id>`);
+    throw new Error(
+      `Missing --job-id. Usage:\n  node src/index.js poll-video --job-id <id> [--campaign-id <id> --slug <slug>]\n` +
+      `  With --campaign-id+--slug: also downloads the video and rewrites the visuals manifest.`,
+    );
   }
   console.log(`\n[poll-video] Polling job ${flags["job-id"]}…`);
-  const result = await pollPendingVideo({ jobId: flags["job-id"] });
+  const result = await pollPendingVideo({
+    jobId: flags["job-id"],
+    campaignId: flags["campaign-id"],
+    slug: flags.slug,
+  });
   console.log(`[poll-video] Done. URL: ${result.url}`);
+  if (result.manifest_updated) {
+    console.log(`[poll-video] Manifest updated → ${result.manifest_path}`);
+    console.log(`[poll-video] Video downloaded → ${result.local_path}`);
+  } else {
+    console.log(`[poll-video] (Pass --campaign-id + --slug to also rehydrate the visuals manifest and download the file.)`);
+  }
 }
 
 async function runReportCmd(argv) {
@@ -383,8 +396,11 @@ async function main() {
                                           End-to-end: Session 1 + Session 2 in one command
   node src/index.js visuals --input <session-1-json> [--intent cinematic_hero|social_ugc|talking_head] [--mode sync|async]
                                           Generate image + video for one prospect (Session 3)
-  node src/index.js poll-video --job-id <id>
-                                          Poll an async video job until ready
+  node src/index.js poll-video --job-id <id> [--campaign-id <id> --slug <slug>]
+                                          Poll an async video job until ready.
+                                          With --campaign-id+--slug, also downloads
+                                          and rewrites the visuals manifest so GHL
+                                          ingest can pick up the URL + local file.
   node src/index.js route-video --prompt "<text>" [--intent ...]
                                           Test the video model router (no generation)
   node src/index.js ingest --campaign-id <id> --slug <prospect-slug> [--live]

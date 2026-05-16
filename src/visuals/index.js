@@ -15,7 +15,7 @@ function slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-async function downloadTo(url, destPath) {
+export async function downloadTo(url, destPath) {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to download ${url}: ${res.status}`);
@@ -128,8 +128,52 @@ export async function generateVisualsForProspect({
   };
 }
 
-export async function pollPendingVideo({ jobId, intervalMs, timeoutMs }) {
-  return pollJob(jobId, { kind: "video", intervalMs, timeoutMs });
+// Poll a pending async video job. When called with just --job-id, prints
+// the URL and exits (one-off mode). When called with --campaign-id and
+// --slug, ALSO downloads the video file and rewrites the visuals manifest
+// in place — this is required for the async batch flow, where visuals is
+// kicked off in async mode (manifest written with url:null, local_path:null)
+// and then poll-video rehydrates the manifest so GHL ingest can pick up
+// ugc_video_url and the local file.
+export async function pollPendingVideo({ jobId, intervalMs, timeoutMs, campaignId, slug }) {
+  const final = await pollJob(jobId, { kind: "video", intervalMs, timeoutMs });
+
+  if (!campaignId || !slug) {
+    return final;
+  }
+
+  const visualsDir = path.join(CAMPAIGN_OUTPUT_DIR, campaignId, "visuals");
+  const manifestPath = path.join(visualsDir, `${slug}_visuals.json`);
+
+  let manifest;
+  try {
+    manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      throw new Error(
+        `No visuals manifest at ${manifestPath} — was this prospect's visuals step ever run?`,
+      );
+    }
+    throw err;
+  }
+
+  const videoPath = path.join(visualsDir, `${slug}_video.mp4`);
+  await downloadTo(final.url, videoPath);
+
+  manifest.video = {
+    ...manifest.video,
+    url: final.url,
+    local_path: videoPath,
+    status: "succeeded",
+  };
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+  return {
+    ...final,
+    manifest_updated: true,
+    manifest_path: manifestPath,
+    local_path: videoPath,
+  };
 }
 
 export { routeVideoModel } from "./router.js";
