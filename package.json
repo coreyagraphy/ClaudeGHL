@@ -1,0 +1,20 @@
+{
+  "name": "mental-vision-claude",
+  "version": "0.1.0",
+  "description": "Mental Vision Corp — GHL infrastructure generator + V5 outbound pipeline (model-routed Claude API).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "ghl:website": "node src/index.js website",
+    "ghl:business-os": "node src/index.js business-os",
+    "ghl:automation": "node src/index.js automation",
+    "ghl:all": "node src/index.js all"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
