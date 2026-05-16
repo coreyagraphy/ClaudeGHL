@@ -48,6 +48,28 @@ async function loadProspects(inputPath) {
       }
     }
   }
+
+  // Detect slug collisions before any work starts. Every per-prospect file
+  // (research, content_bundle, visuals) is keyed by slug(company), and the
+  // ingest step looks up the bundle by that same slug. Two rows with the
+  // same slug would silently overwrite each other under concurrent writes
+  // and push the wrong prospect's content to GHL. Fail loudly at load
+  // time — the user should rename the row or split into two campaigns
+  // rather than have us guess.
+  const bySlug = new Map();
+  for (const [i, r] of rows.entries()) {
+    const slug = slugify(r.company);
+    if (bySlug.has(slug)) {
+      const prev = bySlug.get(slug);
+      throw new Error(
+        `Duplicate slug "${slug}" derived from company name in rows ${prev.i + 1} and ${i + 1}:\n` +
+        `  row ${prev.i + 1}: ${prev.r.company} (${prev.r.city}, ${prev.r.domain})\n` +
+        `  row ${i + 1}: ${r.company} (${r.city}, ${r.domain})\n` +
+        `Rename one (e.g. "ACME HVAC — Indianapolis" vs "ACME HVAC — Carmel") or split into separate campaigns.`,
+      );
+    }
+    bySlug.set(slug, { i, r });
+  }
   return rows;
 }
 
