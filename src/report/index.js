@@ -90,7 +90,7 @@ async function gatherCampaign({ campaignId, outputRoot = "output/campaigns" }) {
 
 function summarize(gathered) {
   const { prospects } = gathered;
-  const byTier = { sprint: 0, stay_found: 0, diagnostic: 0, none: 0 };
+  const byTier = { sprint: 0, stay_found: 0, foundation: 0, none: 0 };
   const byScoreBand = { "0-54": 0, "55-79": 0, "80-100": 0 };
   let blocked = 0;
   let totalScore = 0;

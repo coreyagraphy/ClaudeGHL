@@ -5,10 +5,15 @@
 // In production a user maps these to actual custom field IDs in their location
 // via src/ghl/config.js. The names mirror the 35-field schema in the brief.
 
+// Tier names here must match the keys in MENTAL_VISION_CONTEXT.tiers in
+// src/context.js — they're used to look up the assigned offer, the GHL
+// pipeline stage, and the GHL workflow. The 80+ tier is "foundation"
+// (the $2500 offer), NOT "diagnostic" — diagnostic is a separate $297
+// lead-in offer with no score band.
 function bandFromScore(total) {
   if (total <= 54) return { band: "0-54", tier: "sprint", label: "Foundation" };
   if (total <= 79) return { band: "55-79", tier: "stay_found", label: "Building" };
-  return { band: "80-100", tier: "diagnostic", label: "Optimized" };
+  return { band: "80-100", tier: "foundation", label: "Optimized" };
 }
 
 function offerPrice(assignedOffer) {

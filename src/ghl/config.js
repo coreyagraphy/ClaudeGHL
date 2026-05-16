@@ -21,12 +21,12 @@ export function loadGHLConfig() {
     stages: {
       sprint: process.env.GHL_STAGE_SPRINT || null,
       stay_found: process.env.GHL_STAGE_STAY_FOUND || null,
-      diagnostic: process.env.GHL_STAGE_DIAGNOSTIC || null,
+      foundation: process.env.GHL_STAGE_FOUNDATION || null,
     },
     workflows: {
       sprint: process.env.GHL_WORKFLOW_SPRINT || null,
       stay_found: process.env.GHL_WORKFLOW_STAY_FOUND || null,
-      diagnostic: process.env.GHL_WORKFLOW_DIAGNOSTIC || null,
+      foundation: process.env.GHL_WORKFLOW_FOUNDATION || null,
       default: process.env.GHL_WORKFLOW_DEFAULT || null,
     },
   };
