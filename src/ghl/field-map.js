@@ -38,8 +38,17 @@ function escapeRegex(s) {
 
 function joinPainPoints(painPoints) {
   if (!Array.isArray(painPoints)) return "";
+  // Pain points come from src/research/pain-points.js, which produces
+  // {pain, evidence_field} objects. Earlier versions of this helper
+  // looked for .headline / .title — fields that never exist — so every
+  // entry fell through to JSON.stringify and the GHL custom field
+  // pain_points_summary was getting raw JSON instead of clean text.
   return painPoints
-    .map((p, i) => `${i + 1}. ${typeof p === "string" ? p : p.headline || p.title || JSON.stringify(p)}`)
+    .map((p, i) => {
+      if (typeof p === "string") return `${i + 1}. ${p}`;
+      const text = p.pain || p.headline || p.title;
+      return `${i + 1}. ${text || JSON.stringify(p)}`;
+    })
     .join("\n");
 }
 
