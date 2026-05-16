@@ -5,6 +5,7 @@ import { MENTAL_VISION_CONTEXT } from "../context.js";
 import { generateEntityBrief } from "./entity-brief.js";
 import { generateBuyerJourneyMap } from "./buyer-journey.js";
 import { generateEmailCopy } from "./email.js";
+import { classifyEmailAngle } from "./email-classifier.js";
 import { generateLandingPage } from "./landing-page.js";
 import { generateMetaAdCopy } from "./meta-ads.js";
 import { generateSocialPosts } from "./social-posts.js";
@@ -68,6 +69,19 @@ export async function generateContentForProspect({
     generateSocialPosts(args),
   ]);
 
+  // Independent judge: a separate Haiku classifier picks the best angle from
+  // the 4 variants. Runs after email generation, in parallel with file writes
+  // below would be premature optimization — keep it sequential and explicit
+  // since we need the result for the bundle.
+  const angleClassification = await classifyEmailAngle({
+    researchObject,
+    score,
+    painPoints,
+    firstFix,
+    emailResult: email.data,
+    context,
+  });
+
   // Write outputs in the brief's layout.
   const slug = slugify(researchObject.company_name);
   const campaignDir = path.join(outputRoot, campaignId);
@@ -103,13 +117,18 @@ export async function generateContentForProspect({
     visual_asset_url: null,
     ugc_video_job_id: null,
     ugc_video_url: null,
-    selected_email_angle: email.data.recommended_angle,
+    selected_email_angle: angleClassification.chosen_angle,
     selected_email_subject: email.data.variants.find(
-      (v) => v.angle === email.data.recommended_angle,
+      (v) => v.angle === angleClassification.chosen_angle,
     )?.subject,
     selected_email_body: email.data.variants.find(
-      (v) => v.angle === email.data.recommended_angle,
+      (v) => v.angle === angleClassification.chosen_angle,
     )?.body,
+    email_angle_writer_pick: angleClassification.writer_pick,
+    email_angle_judge_pick: angleClassification.chosen_angle,
+    email_angle_judge_rationale: angleClassification.rationale,
+    email_angle_judge_confidence: angleClassification.confidence,
+    email_angle_writer_judge_agreed: angleClassification.agreed_with_writer,
     paths,
     usage: {
       entity_brief: entityBrief.usage,
@@ -118,6 +137,7 @@ export async function generateContentForProspect({
       landing_page: landingPage.usage,
       meta_ads: metaAds.usage,
       social_posts: socialPosts.usage,
+      email_angle_classifier: angleClassification.usage,
     },
   };
 
