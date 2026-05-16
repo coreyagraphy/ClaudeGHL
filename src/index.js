@@ -12,6 +12,7 @@ import { generateVisualsForProspect, pollPendingVideo } from "./visuals/index.js
 import { routeVideoModel } from "./visuals/router.js";
 import { ingestProspect } from "./ghl/ingest.js";
 import { runBatch } from "./batch/index.js";
+import { generateCampaignReport } from "./report/index.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -281,6 +282,21 @@ async function runPollVideo(argv) {
   console.log(`[poll-video] Done. URL: ${result.url}`);
 }
 
+async function runReportCmd(argv) {
+  const flags = parseFlags(argv);
+  if (!flags["campaign-id"]) {
+    throw new Error(`Missing --campaign-id. Usage:\n  node src/index.js report --campaign-id <id>`);
+  }
+  console.log(`\n[report] Generating campaign report for ${flags["campaign-id"]}…`);
+  const t0 = Date.now();
+  const r = await generateCampaignReport({ campaignId: flags["campaign-id"] });
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[report]   ↳ ${elapsed}s`);
+  console.log(`[report]   ↳ Report → ${r.report_path}`);
+  console.log(`[report]   ↳ State  → ${r.state_path}`);
+  console.log(`[report]   ↳ Summary: ${r.summary.total} prospects, ${r.summary.blocked} blocked, avg score ${r.summary.avg_score ?? "n/a"}`);
+}
+
 async function runBatchCmd(argv) {
   const flags = parseFlags(argv);
   if (!flags.input || !flags["campaign-id"]) {
@@ -374,7 +390,9 @@ async function main() {
                                           Push a prospect's artifacts into GHL (dry-run by default, Session 4)
   node src/index.js batch --input <prospects.csv|.json> --campaign-id <id>
                           [--concurrency 3] [--steps research,content,visuals,ingest] [--force] [--live-ingest]
-                                          Run all sessions over a list of prospects (Session 5)`,
+                                          Run all sessions over a list of prospects (Session 5)
+  node src/index.js report --campaign-id <id>
+                                          Aggregate one campaign and write a Markdown report (Session 6)`,
     );
     process.exit(1);
   }
@@ -416,6 +434,11 @@ async function main() {
 
   if (cmd === "batch") {
     await runBatchCmd(rest);
+    return;
+  }
+
+  if (cmd === "report") {
+    await runReportCmd(rest);
     return;
   }
 

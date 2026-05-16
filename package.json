@@ -11,7 +11,11 @@
     "ghl:all": "node src/index.js all",
     "research": "node src/index.js research",
     "content": "node src/index.js content",
-    "prospect": "node src/index.js prospect"
+    "prospect": "node src/index.js prospect",
+    "visuals": "node src/index.js visuals",
+    "ingest": "node src/index.js ingest",
+    "batch": "node src/index.js batch",
+    "report": "node src/index.js report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
