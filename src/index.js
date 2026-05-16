@@ -289,11 +289,21 @@ async function runVisualsFinalize(argv) {
     videoUrl: flags["video-url"],
     videoJobId: flags["video-job-id"],
   });
-  console.log(`[visuals-finalize]   ↳ Image → ${result.manifest.image.local_path}`);
-  if (result.manifest.video.local_path) {
-    console.log(`[visuals-finalize]   ↳ Video → ${result.manifest.video.local_path}`);
-  } else if (result.manifest.video.job_id) {
-    console.log(`[visuals-finalize]   ↳ Video job pending: ${result.manifest.video.job_id}`);
+  const img = result.manifest.image;
+  if (img.local_path) {
+    console.log(`[visuals-finalize]   ↳ Image → ${img.local_path}`);
+  } else {
+    console.log(`[visuals-finalize]   ↳ Image url-only: ${img.url}`);
+    if (img.download_error) console.log(`[visuals-finalize]     download failed: ${img.download_error}`);
+  }
+  const vid = result.manifest.video;
+  if (vid.local_path) {
+    console.log(`[visuals-finalize]   ↳ Video → ${vid.local_path}`);
+  } else if (vid.url) {
+    console.log(`[visuals-finalize]   ↳ Video url-only: ${vid.url}`);
+    if (vid.download_error) console.log(`[visuals-finalize]     download failed: ${vid.download_error}`);
+  } else if (vid.job_id) {
+    console.log(`[visuals-finalize]   ↳ Video job pending: ${vid.job_id}`);
   }
   console.log(`[visuals-finalize]   ↳ Manifest → ${result.manifest_path}`);
 }
