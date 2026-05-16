@@ -10,6 +10,7 @@ import { runProspectResearch } from "./research/index.js";
 import { generateContentForProspect } from "./content/index.js";
 import { generateVisualsForProspect, pollPendingVideo } from "./visuals/index.js";
 import { routeVideoModel } from "./visuals/router.js";
+import { ingestProspect } from "./ghl/ingest.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -279,6 +280,47 @@ async function runPollVideo(argv) {
   console.log(`[poll-video] Done. URL: ${result.url}`);
 }
 
+async function runIngest(argv) {
+  const flags = parseFlags(argv);
+  if (!flags["campaign-id"] || !flags.slug) {
+    throw new Error(
+      `Missing flags. Usage:\n  node src/index.js ingest --campaign-id <id> --slug <prospect-slug> [--live]\n\nDefaults to dry-run. Add --live to actually push to GHL.`,
+    );
+  }
+  const dryRun = !flags.live;
+  console.log(
+    `\n[ingest] ${flags.slug} | campaign=${flags["campaign-id"]} | mode=${dryRun ? "DRY-RUN" : "LIVE"}`,
+  );
+
+  const result = await ingestProspect({
+    campaignId: flags["campaign-id"],
+    slug: flags.slug,
+    dryRun,
+  });
+
+  if (dryRun) {
+    console.log(`\n[ingest] DRY-RUN plan:\n`);
+    console.log(JSON.stringify(result.plan, null, 2));
+    console.log(`\n[ingest] To execute for real, re-run with --live (requires GHL_API_KEY + GHL_LOCATION_ID in env).`);
+    return;
+  }
+
+  console.log(`[ingest]   ↳ Contact created/updated: ${result.executed.contact?.id}`);
+  if (result.executed.tags_applied) {
+    console.log(`[ingest]   ↳ Tags applied (${result.executed.tags_applied.length})`);
+  }
+  if (result.executed.opportunity) {
+    console.log(`[ingest]   ↳ Opportunity: ${result.executed.opportunity?.opportunity?.id || result.executed.opportunity?.id}`);
+  } else if (result.executed.opportunity_skipped) {
+    console.log(`[ingest]   ↳ Opportunity skipped: ${result.executed.opportunity_skipped}`);
+  }
+  if (result.executed.workflow) {
+    console.log(`[ingest]   ↳ Added to workflow: ${result.executed.workflow.id}`);
+  } else if (result.executed.workflow_skipped) {
+    console.log(`[ingest]   ↳ Workflow skipped: ${result.executed.workflow_skipped}`);
+  }
+}
+
 async function runRouteVideo(argv) {
   const flags = parseFlags(argv);
   if (!flags.prompt) {
@@ -308,7 +350,9 @@ async function main() {
   node src/index.js poll-video --job-id <id>
                                           Poll an async video job until ready
   node src/index.js route-video --prompt "<text>" [--intent ...]
-                                          Test the video model router (no generation)`,
+                                          Test the video model router (no generation)
+  node src/index.js ingest --campaign-id <id> --slug <prospect-slug> [--live]
+                                          Push a prospect's artifacts into GHL (dry-run by default, Session 4)`,
     );
     process.exit(1);
   }
@@ -340,6 +384,11 @@ async function main() {
 
   if (cmd === "route-video") {
     await runRouteVideo(rest);
+    return;
+  }
+
+  if (cmd === "ingest") {
+    await runIngest(rest);
     return;
   }
 
