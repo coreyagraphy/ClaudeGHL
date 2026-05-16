@@ -39,7 +39,11 @@ function normalizeModel(model) {
   return (model || "").replace(/\[\dm\]$/i, "");
 }
 
-function runClaudeCli({ args, stdin, timeoutMs = 600000 }) {
+// 20 minutes default. Generations through the claude CLI subscription are
+// noticeably slower than direct API calls — a 32k-token landing page,
+// for instance, can take 8-12 minutes to stream back. Web-search-tool
+// callers override with their own (longer) value via generateWithWebSearchViaCli.
+function runClaudeCli({ args, stdin, timeoutMs = 1200000 }) {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -166,7 +170,10 @@ async function generateWithWebSearchViaCli({ model, systemPrompt, userPrompt }) 
   ];
   if (systemPrompt) args.push("--system-prompt", systemPrompt);
 
-  const parsed = await runClaudeCli({ args, stdin: userPrompt, timeoutMs: 900000 });
+  // Web search does multiple round-trips (search -> fetch -> summarize)
+  // and can chain continuations on pause_turn, so it needs the most
+  // headroom of any CLI call type.
+  const parsed = await runClaudeCli({ args, stdin: userPrompt, timeoutMs: 1800000 });
   return {
     text: parsed.result || "",
     usage: cliResultToUsage(parsed),
