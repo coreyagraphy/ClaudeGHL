@@ -32,7 +32,7 @@ export async function generateVisualsForProspect({
   videoIntent = "cinematic_hero",
   videoMode = "sync",
 }) {
-  const slug = slugify(session1Result.research_object.business);
+  const slug = slugify(session1Result.research_object.company_name);
   const visualsDir = path.join(CAMPAIGN_OUTPUT_DIR, campaignId, "visuals");
   await fs.mkdir(visualsDir, { recursive: true });
 
@@ -85,7 +85,7 @@ export async function generateVisualsForProspect({
   }
 
   const manifest = {
-    prospect: session1Result.research_object.business,
+    prospect: session1Result.research_object.company_name,
     campaign_id: campaignId,
     image: {
       model: "nano_banana_2",
@@ -111,7 +111,10 @@ export async function generateVisualsForProspect({
     },
   };
 
-  const manifestPath = path.join(visualsDir, `${slug}_manifest.json`);
+  // IMPORTANT: this filename must match the path the batch loader and GHL
+  // ingest read from — both expect `${slug}_visuals.json` under visuals/.
+  // Changing one without the other silently breaks visuals -> GHL linking.
+  const manifestPath = path.join(visualsDir, `${slug}_visuals.json`);
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
 
   return {

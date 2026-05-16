@@ -61,7 +61,7 @@ export async function buildImagePrompt({ session1Result }) {
   const brand = brandSnapshot(context);
 
   const user = `PROSPECT:
-- Business: ${research.business}
+- Business: ${research.company_name}
 - Niche: ${research.niche}
 - Location: ${research.city}, ${research.state}
 - Owner: ${research.owner_first || "unknown"}
@@ -90,7 +90,7 @@ export async function buildVideoPrompt({ session1Result, intent = "cinematic_her
   const brand = brandSnapshot(context);
 
   const user = `PROSPECT:
-- Business: ${research.business}
+- Business: ${research.company_name}
 - Niche: ${research.niche}
 - Location: ${research.city}, ${research.state}
 - Owner: ${research.owner_first || "unknown"}
