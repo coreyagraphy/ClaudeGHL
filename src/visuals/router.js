@@ -1,18 +1,22 @@
 import { generateJSON } from "../anthropic-client.js";
 import { MODELS } from "../models.js";
 
+// Model IDs MUST match Higgsfield's catalog (verify with the MCP tool
+// `models_explore` action=list type=video). Earlier versions of this file
+// used invented IDs like "higgsfield_studio_video" and "kling_3_0" that
+// don't exist — generations would fail at the MCP boundary.
 export const VIDEO_MODELS = {
-  higgsfield_studio_video: "higgsfield_studio_video",
-  kling_3_0: "kling_3_0",
+  cinematic_studio_3_0: "cinematic_studio_3_0",
+  kling3_0: "kling3_0",
   seedance_2_0: "seedance_2_0",
 };
 
 export const VIDEO_INTENTS = ["cinematic_hero", "social_ugc", "talking_head"];
 
 const INTENT_TO_MODEL = {
-  cinematic_hero: VIDEO_MODELS.higgsfield_studio_video,
+  cinematic_hero: VIDEO_MODELS.cinematic_studio_3_0,
   social_ugc: VIDEO_MODELS.seedance_2_0,
-  talking_head: VIDEO_MODELS.kling_3_0,
+  talking_head: VIDEO_MODELS.kling3_0,
 };
 
 const KEYWORD_SIGNALS = {
@@ -25,7 +29,7 @@ const KEYWORD_SIGNALS = {
     /meta ad creative/i,
     /casual/i,
   ],
-  [VIDEO_MODELS.kling_3_0]: [
+  [VIDEO_MODELS.kling3_0]: [
     /talking head/i,
     /\bfounder\s+(speaks|says|talks)/i,
     /interview/i,
@@ -33,7 +37,7 @@ const KEYWORD_SIGNALS = {
     /lip[\s-]?sync/i,
     /\bperson\b.*\bspeak/i,
   ],
-  [VIDEO_MODELS.higgsfield_studio_video]: [
+  [VIDEO_MODELS.cinematic_studio_3_0]: [
     /cinematic/i,
     /tracking shot/i,
     /dolly/i,
@@ -61,13 +65,13 @@ const ROUTER_SCHEMA = {
 
 const ROUTER_SYSTEM_PROMPT = `You are a video model routing agent. Choose ONE of three video models based on the prompt's needs.
 
-higgsfield_studio_video — Best for: cinematic camera motion (dolly/pan/tracking/aerial), branded hero shots, establishing shots, atmospheric brand-mood pieces, cyberpunk/industrial aesthetics. Higgsfield originated controllable camera motion. Default when ambiguous.
+cinematic_studio_3_0 — Higgsfield's flagship Cinema Studio model. Best for: cinematic camera motion (dolly/pan/tracking/aerial), branded hero shots, establishing shots, atmospheric brand-mood pieces, cyberpunk/industrial aesthetics. Default when ambiguous.
 
-kling_3_0 — Best for: photorealistic humans, talking heads, founder testimonials, lip sync, complex physics, long takes (8s+). Strongest at realistic people.
+kling3_0 — Best for: photorealistic humans, talking heads, founder testimonials, lip sync, complex physics, long takes (8s+). Strongest at realistic people.
 
 seedance_2_0 — Best for: UGC/TikTok aesthetic, short vertical 9:16 social ads, "for-you-page" energy, fast iteration, casual selfie-style. Use ONLY when prompt is explicitly social/UGC.
 
-Output ONLY the JSON object. Bias toward higgsfield_studio_video unless the prompt clearly signals UGC or a talking head.`;
+Output ONLY the JSON object. Bias toward cinematic_studio_3_0 unless the prompt clearly signals UGC or a talking head.`;
 
 function matchByKeyword(prompt) {
   const scores = {};
@@ -121,8 +125,8 @@ export function routeVideoModelSync({ prompt, intent }) {
     };
   }
   return {
-    model: VIDEO_MODELS.higgsfield_studio_video,
-    rationale: "No clear signal; defaulting to brand-aesthetic model",
+    model: VIDEO_MODELS.cinematic_studio_3_0,
+    rationale: "No clear signal; defaulting to Cinema Studio 3.0",
     classifier: "default",
     confidence: 40,
   };

@@ -112,19 +112,39 @@ export async function finalizeVisuals({
     throw err;
   }
 
+  // Download failures should NOT lose the URL — if we crash here, the
+  // caller has to manually re-call us with the same URL or risk forgetting
+  // it entirely. Record the URL in the manifest unconditionally; mark
+  // local_path null if download failed (e.g. signed CloudFront URLs from a
+  // restricted IP range). A later `visuals-finalize` run from a permitted
+  // network can fill in the file.
   const imagePath = path.join(visualsDir, `${slug}_hero.png`);
-  await downloadTo(imageUrl, imagePath);
+  let imageLocalPath = imagePath;
+  let imageDownloadError = null;
+  try {
+    await downloadTo(imageUrl, imagePath);
+  } catch (err) {
+    imageLocalPath = null;
+    imageDownloadError = err.message;
+  }
 
   let videoPath = null;
   let videoBundle;
+  let videoDownloadError = null;
   if (videoUrl) {
     videoPath = path.join(visualsDir, `${slug}_video.mp4`);
-    await downloadTo(videoUrl, videoPath);
+    try {
+      await downloadTo(videoUrl, videoPath);
+    } catch (err) {
+      videoPath = null;
+      videoDownloadError = err.message;
+    }
     videoBundle = {
       job_id: videoJobId || null,
       url: videoUrl,
       local_path: videoPath,
-      status: "succeeded",
+      status: videoPath ? "succeeded" : "url_only",
+      ...(videoDownloadError && { download_error: videoDownloadError }),
     };
   } else if (videoJobId) {
     // Async kickoff with no URL yet — manifest tracks the pending job,
@@ -150,8 +170,9 @@ export async function finalizeVisuals({
     image: {
       ...brief.image,
       url: imageUrl,
-      local_path: imagePath,
+      local_path: imageLocalPath,
       job_id: imageJobId || null,
+      ...(imageDownloadError && { download_error: imageDownloadError }),
     },
     video: {
       ...brief.video,
