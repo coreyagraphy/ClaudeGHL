@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { runProspectResearch } from "../research/index.js";
 import { generateContentForProspect } from "../content/index.js";
-import { generateVisualsForProspect } from "../visuals/index.js";
+import { prepareVisualBrief } from "../visuals/index.js";
 import { ingestProspect } from "../ghl/ingest.js";
 
 const DEFAULT_STEPS = ["research", "content", "visuals", "ingest"];
@@ -135,6 +135,7 @@ async function runOneProspect({ prospect, campaignId, steps, force, dryIngest, o
   const researchPath = path.join(campaignDir, "research", `${slug}.json`);
   const bundlePath = path.join(campaignDir, "content_bundles", `${slug}_bundle.json`);
   const visualsPath = path.join(campaignDir, "visuals", `${slug}_visuals.json`);
+  const visualsBriefPath = path.join(campaignDir, "visuals", `${slug}_brief.json`);
 
   const log = [];
   const result = {
@@ -200,25 +201,35 @@ async function runOneProspect({ prospect, campaignId, steps, force, dryIngest, o
     }
   }
 
-  // Step: visuals
+  // Step: visuals — prepare brief only. Actual MCP generation is a separate
+  // step driven by Claude Code (`visuals-pending` to list, then per-prospect
+  // generate_image + generate_video + `visuals-finalize` to write the
+  // manifest). Briefs are cheap to regenerate, so we use the manifest's
+  // presence as the cache key — if the manifest exists, the visuals are
+  // already done; otherwise we (re)prepare the brief.
   if (steps.includes("visuals")) {
-    const have = await readJSONIfExists(visualsPath);
-    if (have && !force) {
+    const haveManifest = await readJSONIfExists(visualsPath);
+    if (haveManifest && !force) {
       result.steps.visuals = { status: "cached" };
     } else {
-      const t0 = Date.now();
-      const r = await generateVisualsForProspect({
-        session1Result: research,
-        campaignId,
-        videoIntent: prospect.intent || "cinematic_hero",
-        videoMode: "async",
-      });
-      result.steps.visuals = {
-        status: "ok",
-        elapsed_s: ((Date.now() - t0) / 1000).toFixed(1),
-        video_model: r.manifest?.video?.model,
-        video_job_id: r.manifest?.video?.job_id,
-      };
+      const haveBrief = await readJSONIfExists(visualsBriefPath);
+      if (haveBrief && !force) {
+        result.steps.visuals = { status: "brief_ready" };
+      } else {
+        const t0 = Date.now();
+        const r = await prepareVisualBrief({
+          session1Result: research,
+          campaignId,
+          videoIntent: prospect.intent || "cinematic_hero",
+        });
+        result.steps.visuals = {
+          status: "brief_ready",
+          elapsed_s: ((Date.now() - t0) / 1000).toFixed(1),
+          image_model: r.brief.image.model,
+          video_model: r.brief.video.model,
+          brief_path: r.brief_path,
+        };
+      }
     }
   }
 

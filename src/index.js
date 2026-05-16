@@ -8,7 +8,7 @@ import { generateBusinessOSPrompt } from "./generators/business-os.js";
 import { generateAutomationPrompt } from "./generators/automation.js";
 import { runProspectResearch } from "./research/index.js";
 import { generateContentForProspect } from "./content/index.js";
-import { generateVisualsForProspect, pollPendingVideo } from "./visuals/index.js";
+import { prepareVisualBrief, finalizeVisuals, listPendingBriefs } from "./visuals/index.js";
 import { routeVideoModel } from "./visuals/router.js";
 import { ingestProspect } from "./ghl/ingest.js";
 import { runBatch } from "./batch/index.js";
@@ -234,65 +234,85 @@ async function runProspect(argv) {
   console.log(`\n[prospect] Done in ${totalElapsed}s total.`);
 }
 
+// MCP-driven visuals: this command prepares the per-prospect brief
+// (model selection via Haiku router + image + video prompts) and writes
+// it to disk. The actual generation happens in a Claude Code session
+// via the Higgsfield MCP tools — see README "Generating visuals" — and
+// is finalized back into the manifest via `visuals-finalize`.
 async function runVisuals(argv) {
   const flags = parseFlags(argv);
   if (!flags.input) {
     throw new Error(
-      `Missing --input. Usage:\n  node src/index.js visuals --input output/campaigns/<id>/research/<slug>.json [--campaign-id <id>] [--intent cinematic_hero|social_ugc|talking_head] [--mode sync|async]`,
+      `Missing --input. Usage:\n  node src/index.js visuals --input output/campaigns/<id>/research/<slug>.json [--campaign-id <id>] [--intent cinematic_hero|social_ugc|talking_head]`,
     );
   }
   const session1 = JSON.parse(await fs.readFile(flags.input, "utf8"));
   const campaignId = flags["campaign-id"] || session1.campaign_id || "adhoc";
   const intent = flags.intent || "cinematic_hero";
-  const mode = flags.mode || "sync";
 
   console.log(
-    `\n[visuals] ${session1.research_object.business} | campaign=${campaignId} intent=${intent} mode=${mode}`,
+    `\n[visuals] ${session1.research_object.company_name} | campaign=${campaignId} intent=${intent}`,
   );
   const started = Date.now();
 
-  const result = await generateVisualsForProspect({
+  const result = await prepareVisualBrief({
     session1Result: session1,
     campaignId,
     videoIntent: intent,
-    videoMode: mode,
   });
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
-  console.log(`[visuals] Done in ${elapsed}s`);
-  console.log(`[visuals]   ↳ Image → ${result.manifest.image.local_path}`);
+  console.log(`[visuals] Brief prepared in ${elapsed}s`);
+  console.log(`[visuals]   ↳ Image model: ${result.brief.image.model} (16:9)`);
   console.log(
-    `[visuals]   ↳ Video model=${result.manifest.video.model} (${result.manifest.video.router_classifier}, conf=${result.manifest.video.router_confidence})`,
+    `[visuals]   ↳ Video model: ${result.brief.video.model} (router=${result.brief.video.router_classifier}, conf=${result.brief.video.router_confidence})`,
   );
-  console.log(`[visuals]   ↳ Video rationale: ${result.manifest.video.router_rationale}`);
-  if (mode === "async") {
-    console.log(`[visuals]   ↳ Video job kicked off: ${result.manifest.video.job_id}`);
-  } else {
-    console.log(`[visuals]   ↳ Video → ${result.manifest.video.local_path}`);
-  }
-  console.log(`[visuals]   ↳ Manifest → ${result.manifest_path}`);
+  console.log(`[visuals]   ↳ Rationale: ${result.brief.video.router_rationale}`);
+  console.log(`[visuals]   ↳ Brief → ${result.brief_path}`);
+  console.log(`[visuals] Next: ask Claude Code to generate, e.g.:`);
+  console.log(`[visuals]   "Generate visuals for campaign ${campaignId} via MCP."`);
 }
 
-async function runPollVideo(argv) {
+async function runVisualsFinalize(argv) {
   const flags = parseFlags(argv);
-  if (!flags["job-id"]) {
+  if (!flags["campaign-id"] || !flags.slug || !flags["image-url"]) {
     throw new Error(
-      `Missing --job-id. Usage:\n  node src/index.js poll-video --job-id <id> [--campaign-id <id> --slug <slug>]\n` +
-      `  With --campaign-id+--slug: also downloads the video and rewrites the visuals manifest.`,
+      `Missing flags. Usage:\n  node src/index.js visuals-finalize --campaign-id <id> --slug <slug> --image-url <url> [--image-job-id <id>] [--video-url <url>] [--video-job-id <id>]`,
     );
   }
-  console.log(`\n[poll-video] Polling job ${flags["job-id"]}…`);
-  const result = await pollPendingVideo({
-    jobId: flags["job-id"],
+  console.log(`\n[visuals-finalize] ${flags.slug} | campaign=${flags["campaign-id"]}`);
+  const result = await finalizeVisuals({
     campaignId: flags["campaign-id"],
     slug: flags.slug,
+    imageUrl: flags["image-url"],
+    imageJobId: flags["image-job-id"],
+    videoUrl: flags["video-url"],
+    videoJobId: flags["video-job-id"],
   });
-  console.log(`[poll-video] Done. URL: ${result.url}`);
-  if (result.manifest_updated) {
-    console.log(`[poll-video] Manifest updated → ${result.manifest_path}`);
-    console.log(`[poll-video] Video downloaded → ${result.local_path}`);
-  } else {
-    console.log(`[poll-video] (Pass --campaign-id + --slug to also rehydrate the visuals manifest and download the file.)`);
+  console.log(`[visuals-finalize]   ↳ Image → ${result.manifest.image.local_path}`);
+  if (result.manifest.video.local_path) {
+    console.log(`[visuals-finalize]   ↳ Video → ${result.manifest.video.local_path}`);
+  } else if (result.manifest.video.job_id) {
+    console.log(`[visuals-finalize]   ↳ Video job pending: ${result.manifest.video.job_id}`);
+  }
+  console.log(`[visuals-finalize]   ↳ Manifest → ${result.manifest_path}`);
+}
+
+async function runVisualsPending(argv) {
+  const flags = parseFlags(argv);
+  if (!flags["campaign-id"]) {
+    throw new Error(`Missing --campaign-id.`);
+  }
+  const pending = await listPendingBriefs({ campaignId: flags["campaign-id"] });
+  if (pending.length === 0) {
+    console.log(`No pending briefs for campaign ${flags["campaign-id"]} — all briefs have a matching visuals manifest.`);
+    return;
+  }
+  console.log(`Pending visual briefs for campaign ${flags["campaign-id"]}: ${pending.length}`);
+  for (const p of pending) {
+    console.log(`  - ${p.slug}`);
+    console.log(`      image: ${p.brief.image.model} | "${p.brief.image.prompt.slice(0, 80)}…"`);
+    console.log(`      video: ${p.brief.video.model} | "${p.brief.video.prompt.slice(0, 80)}…"`);
   }
 }
 
@@ -394,13 +414,17 @@ async function main() {
                                           Generate full content stack (Session 2)
   node src/index.js prospect --company ... --domain ... --city ... --niche ...
                                           End-to-end: Session 1 + Session 2 in one command
-  node src/index.js visuals --input <session-1-json> [--intent cinematic_hero|social_ugc|talking_head] [--mode sync|async]
-                                          Generate image + video for one prospect (Session 3)
-  node src/index.js poll-video --job-id <id> [--campaign-id <id> --slug <slug>]
-                                          Poll an async video job until ready.
-                                          With --campaign-id+--slug, also downloads
-                                          and rewrites the visuals manifest so GHL
-                                          ingest can pick up the URL + local file.
+  node src/index.js visuals --input <session-1-json> [--intent cinematic_hero|social_ugc|talking_head]
+                                          Prepare visual brief (Session 3, MCP-driven).
+                                          Actual generation happens in a Claude Code session
+                                          via Higgsfield MCP tools — see README.
+  node src/index.js visuals-pending --campaign-id <id>
+                                          List briefs that have no matching manifest yet
+                                          (i.e. the set Claude Code still needs to generate).
+  node src/index.js visuals-finalize --campaign-id <id> --slug <slug>
+                          --image-url <url> [--video-url <url>] [--image-job-id <id>] [--video-job-id <id>]
+                                          Called by Claude Code after MCP generation:
+                                          downloads files locally and writes the manifest.
   node src/index.js route-video --prompt "<text>" [--intent ...]
                                           Test the video model router (no generation)
   node src/index.js ingest --campaign-id <id> --slug <prospect-slug> [--live]
@@ -435,8 +459,13 @@ async function main() {
     return;
   }
 
-  if (cmd === "poll-video") {
-    await runPollVideo(rest);
+  if (cmd === "visuals-finalize") {
+    await runVisualsFinalize(rest);
+    return;
+  }
+
+  if (cmd === "visuals-pending") {
+    await runVisualsPending(rest);
     return;
   }
 

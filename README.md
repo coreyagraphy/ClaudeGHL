@@ -40,9 +40,10 @@ npm run ghl:all
 npm run prospect -- --company "Williams Comfort Air" --domain "williamscomfortair.com" \
   --city "Indianapolis" --state "Indiana" --niche "HVAC" --campaign-id "validate-1"
 
-# Generate visuals for that prospect (uses the research file written above)
+# Prepare the visual brief for that prospect (no network calls yet)
 npm run visuals -- --input output/campaigns/validate-1/research/williams-comfort-air.json \
-  --campaign-id validate-1 --mode async
+  --campaign-id validate-1
+# Then ask Claude Code to generate via Higgsfield MCP — see "Generating visuals" below
 
 # Dry-run the GHL ingestion to inspect the exact payload
 npm run ingest -- --campaign-id validate-1 --slug williams-comfort-air
@@ -53,6 +54,36 @@ npm run ingest -- --campaign-id validate-1 --slug williams-comfort-air --live
 # Aggregate a full campaign into a report
 npm run report -- --campaign-id validate-1
 ```
+
+## Generating visuals
+
+Higgsfield is integrated **via MCP**, not via an HTTP API key. That means
+the Node.js pipeline can prepare a per-prospect visual brief, but the
+actual image + video generation has to happen inside a Claude Code
+session where the Higgsfield MCP tools are reachable.
+
+The workflow:
+
+```bash
+# Step 1 (Node.js): prepare briefs. Runs in batch or one-off, no network.
+npm run batch -- --input prospects.csv --campaign-id hvac-2026 --steps research,content,visuals
+
+# Step 2 (Claude Code): in any Claude Code session targeting this repo,
+# ask: "Generate visuals for campaign hvac-2026 via MCP."
+# I'll list the pending briefs, call MCP generate_image / generate_video
+# for each, then finalize the manifests back.
+
+# Step 3 (Node.js): verify and ingest as normal.
+npm run visuals-pending -- --campaign-id hvac-2026   # should list nothing
+npm run batch -- --input prospects.csv --campaign-id hvac-2026 --steps ingest
+```
+
+Under the hood, Claude Code calls `npm run visuals-finalize -- --campaign-id X
+--slug Y --image-url <url> --video-url <url>` per prospect — same Node.js
+code path that downloads files locally and writes the manifest.
+
+Want unattended visuals (cron, overnight runs)? Add an HTTPS-based Higgsfield
+client back in `src/visuals/` and have it consume the same brief shape.
 
 ## Batch mode
 
@@ -119,9 +150,10 @@ output/
     landing_pages/<slug>.html
     meta_copy/<slug>_meta.json
     social_posts/<slug>_social.json
-    visuals/<slug>_visuals.json             # Session 3
+    visuals/<slug>_brief.json               # Session 3 brief (Node.js writes)
+    visuals/<slug>_visuals.json             # Session 3 manifest (Claude Code writes after MCP)
     visuals/<slug>_hero.png
-    visuals/<slug>_video.mp4 (or job_id for async)
+    visuals/<slug>_video.mp4
     batch_manifest.json                     # Session 5 (when batch was used)
     campaign_report.md                      # Session 6
     campaign_state.json                     # Session 6 (machine-readable companion)

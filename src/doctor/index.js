@@ -133,11 +133,16 @@ async function checkGHL(results) {
 }
 
 async function checkHiggsfield(results) {
-  if (!process.env.HIGGSFIELD_API_KEY) {
-    record(results, "WARN", "Higgsfield", "HIGGSFIELD_API_KEY not set — visuals step will fail");
-    return;
-  }
-  record(results, "OK", "Higgsfield", "key present (MCP layer probes at call time)");
+  // Higgsfield is MCP-driven in this codebase — the Node.js pipeline
+  // prepares a brief, then Claude Code calls Higgsfield via MCP tools
+  // (mcp__*__generate_image, mcp__*__generate_video) and writes the
+  // result back via `visuals-finalize`. There's no API key to check here.
+  record(
+    results,
+    "INFO",
+    "Higgsfield",
+    "MCP-driven (Node.js prepares briefs; Claude Code generates via MCP tools — see README)",
+  );
 }
 
 async function checkOutputDirs(results) {
