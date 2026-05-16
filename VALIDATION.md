@@ -16,12 +16,37 @@ git checkout claude/review-and-proceed-qXy29
 npm install
 ```
 
-## 2. Set your API key
+## 2. Pick a backend
+
+You have two choices — both produce identical output, they just bill differently.
+
+### Option A — Claude subscription (no API key needed) ✨
+
+If you have Claude Pro / Max / Teams, the pipeline can run through your existing
+`claude` CLI login (OAuth). Nothing to copy, nothing to paste.
+
+```bash
+cp .env.example .env
+# Edit .env, set: LLM_BACKEND=claude-cli
+# Leave ANTHROPIC_API_KEY blank.
+```
+
+Make sure you're logged in: `claude` once interactively, then exit.
+
+**Tradeoffs:** subscription rate limits are tighter than API spend limits, so
+this is great for validation runs (1–10 prospects) but for daily batches of 50+
+you'll likely want Option B. Each call is also a few seconds slower (subprocess
+startup overhead, ~2–3s per call).
+
+### Option B — Anthropic API key
 
 ```bash
 cp .env.example .env
 # Edit .env, paste your ANTHROPIC_API_KEY=sk-ant-...
+# Leave LLM_BACKEND blank (or set LLM_BACKEND=api).
 ```
+
+Faster per-call, no rate-limit pain for batch jobs. Billed at standard API rates.
 
 ## 3. Validate Session 0 (GHL prompts)
 
