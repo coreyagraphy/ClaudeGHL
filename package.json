@@ -8,7 +8,8 @@
     "ghl:website": "node src/index.js website",
     "ghl:business-os": "node src/index.js business-os",
     "ghl:automation": "node src/index.js automation",
-    "ghl:all": "node src/index.js all"
+    "ghl:all": "node src/index.js all",
+    "research": "node src/index.js research"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

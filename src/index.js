@@ -6,10 +6,12 @@ import { MENTAL_VISION_CONTEXT } from "./context.js";
 import { generateWebsitePrompt } from "./generators/website.js";
 import { generateBusinessOSPrompt } from "./generators/business-os.js";
 import { generateAutomationPrompt } from "./generators/automation.js";
+import { runProspectResearch } from "./research/index.js";
 
-const OUTPUT_DIR = "output/ghl_prompts";
+const GHL_OUTPUT_DIR = "output/ghl_prompts";
+const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
 
-const TARGETS = {
+const GHL_TARGETS = {
   website: {
     fn: generateWebsitePrompt,
     file: "vibe_coder_prompt.txt",
@@ -27,10 +29,12 @@ const TARGETS = {
   },
 };
 
-async function runTarget(name) {
-  const target = TARGETS[name];
+async function runGHLTarget(name) {
+  const target = GHL_TARGETS[name];
   if (!target) {
-    throw new Error(`Unknown target: ${name}. Valid: ${Object.keys(TARGETS).join(", ")}, all`);
+    throw new Error(
+      `Unknown GHL target: ${name}. Valid: ${Object.keys(GHL_TARGETS).join(", ")}, all`,
+    );
   }
 
   console.log(`\n[${name}] Generating ${target.label}…`);
@@ -38,8 +42,8 @@ async function runTarget(name) {
 
   const result = await target.fn(MENTAL_VISION_CONTEXT);
 
-  await fs.mkdir(OUTPUT_DIR, { recursive: true });
-  const outPath = path.join(OUTPUT_DIR, target.file);
+  await fs.mkdir(GHL_OUTPUT_DIR, { recursive: true });
+  const outPath = path.join(GHL_OUTPUT_DIR, target.file);
   await fs.writeFile(outPath, result.text, "utf8");
 
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
@@ -51,19 +55,94 @@ async function runTarget(name) {
   console.log(`[${name}] Saved → ${outPath}`);
 }
 
+function parseFlags(argv) {
+  const flags = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2);
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        flags[key] = true;
+      } else {
+        flags[key] = next;
+        i++;
+      }
+    }
+  }
+  return flags;
+}
+
+async function runResearch(argv) {
+  const flags = parseFlags(argv);
+  const required = ["company", "domain", "city", "niche"];
+  for (const f of required) {
+    if (!flags[f]) {
+      throw new Error(
+        `Missing --${f}. Usage:\n  node src/index.js research --company "ACME HVAC" --domain "acmehvac.com" --city "Indianapolis" --state "Indiana" --niche "HVAC" [--campaign-id "hvac-indy-2026-05"]`,
+      );
+    }
+  }
+
+  const campaignId = flags["campaign-id"] || "adhoc";
+  const confidenceThreshold = flags["confidence-threshold"]
+    ? Number(flags["confidence-threshold"])
+    : 60;
+
+  console.log(`\n[research] ${flags.company} (${flags.domain})`);
+  const started = Date.now();
+
+  const result = await runProspectResearch({
+    company: flags.company,
+    domain: flags.domain,
+    city: flags.city,
+    state: flags.state,
+    niche: flags.niche,
+    confidenceThreshold,
+  });
+
+  const slug = flags.company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const outDir = path.join(CAMPAIGN_OUTPUT_DIR, campaignId, "research");
+  await fs.mkdir(outDir, { recursive: true });
+  const outPath = path.join(outDir, `${slug}.json`);
+  await fs.writeFile(outPath, JSON.stringify(result, null, 2), "utf8");
+
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(
+    `[research] Done in ${elapsed}s — score=${result.score.total}/100 (${result.score.label}) confidence=${result.confidence}/100 status=${result.research_status}`,
+  );
+  if (result.assigned_offer) {
+    console.log(`[research] Assigned offer: ${result.assigned_offer.name}`);
+  }
+  console.log(`[research] Saved → ${outPath}`);
+}
+
 async function main() {
-  const arg = process.argv[2];
-  if (!arg) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  if (!cmd) {
     console.error(
-      `Usage: node src/index.js <target>\n  Targets: ${Object.keys(TARGETS).join(", ")}, all`,
+      `Usage:
+  node src/index.js <ghl-target>          Generate one GHL prompt
+    targets: ${Object.keys(GHL_TARGETS).join(", ")}, all
+  node src/index.js research --company ... --domain ... --city ... --niche ...
+                                          Research + score one prospect`,
     );
     process.exit(1);
   }
 
-  const targets = arg === "all" ? Object.keys(TARGETS) : [arg];
-  for (const name of targets) {
-    await runTarget(name);
+  if (cmd === "research") {
+    await runResearch(rest);
+    return;
   }
+
+  if (cmd === "all") {
+    for (const name of Object.keys(GHL_TARGETS)) {
+      await runGHLTarget(name);
+    }
+    return;
+  }
+
+  await runGHLTarget(cmd);
 }
 
 main().catch((err) => {
