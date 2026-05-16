@@ -161,6 +161,73 @@ async function runContent(argv) {
   );
 }
 
+async function runProspect(argv) {
+  const flags = parseFlags(argv);
+  const required = ["company", "domain", "city", "niche"];
+  for (const f of required) {
+    if (!flags[f]) {
+      throw new Error(
+        `Missing --${f}. Usage:\n  node src/index.js prospect --company "ACME HVAC" --domain "acmehvac.com" --city "Indianapolis" --state "Indiana" --niche "HVAC" --campaign-id "hvac-indy-2026-05"`,
+      );
+    }
+  }
+  const campaignId = flags["campaign-id"] || "adhoc";
+  const confidenceThreshold = flags["confidence-threshold"]
+    ? Number(flags["confidence-threshold"])
+    : 60;
+
+  console.log(`\n[prospect] ${flags.company} | campaign=${campaignId}`);
+  const wallStart = Date.now();
+
+  // --- Session 1 ---
+  console.log(`[prospect] Session 1: research + scoring…`);
+  const s1Start = Date.now();
+  const session1 = await runProspectResearch({
+    company: flags.company,
+    domain: flags.domain,
+    city: flags.city,
+    state: flags.state,
+    niche: flags.niche,
+    confidenceThreshold,
+  });
+  const s1Elapsed = ((Date.now() - s1Start) / 1000).toFixed(1);
+
+  const slug = flags.company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const s1Dir = path.join(CAMPAIGN_OUTPUT_DIR, campaignId, "research");
+  await fs.mkdir(s1Dir, { recursive: true });
+  const s1Path = path.join(s1Dir, `${slug}.json`);
+  await fs.writeFile(s1Path, JSON.stringify(session1, null, 2), "utf8");
+
+  console.log(
+    `[prospect]   ↳ ${s1Elapsed}s | score=${session1.score.total}/100 (${session1.score.label}) | confidence=${session1.confidence}/100 | status=${session1.research_status}`,
+  );
+  console.log(`[prospect]   ↳ Saved → ${s1Path}`);
+
+  if (!session1.content_eligible) {
+    console.log(
+      `[prospect] Stopping — confidence below threshold (${session1.confidence} < ${confidenceThreshold}). Manual review needed.`,
+    );
+    return;
+  }
+
+  // --- Session 2 ---
+  console.log(`[prospect] Session 2: content stack (6 generators, parallel)…`);
+  const s2Start = Date.now();
+  const session2 = await generateContentForProspect({
+    session1Result: session1,
+    campaignId,
+  });
+  const s2Elapsed = ((Date.now() - s2Start) / 1000).toFixed(1);
+
+  console.log(`[prospect]   ↳ ${s2Elapsed}s`);
+  console.log(`[prospect]   ↳ Bundle → ${session2.bundle_path}`);
+  console.log(`[prospect]   ↳ Landing page → ${session2.bundle.paths.landing_page}`);
+  console.log(`[prospect]   ↳ Email angle → ${session2.bundle.selected_email_angle}`);
+
+  const totalElapsed = ((Date.now() - wallStart) / 1000).toFixed(1);
+  console.log(`\n[prospect] Done in ${totalElapsed}s total.`);
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   if (!cmd) {
@@ -169,9 +236,11 @@ async function main() {
   node src/index.js <ghl-target>          Generate one GHL prompt
     targets: ${Object.keys(GHL_TARGETS).join(", ")}, all
   node src/index.js research --company ... --domain ... --city ... --niche ...
-                                          Research + score one prospect
+                                          Research + score one prospect (Session 1)
   node src/index.js content --input <session-1-json> [--campaign-id <id>]
-                                          Generate full content stack for one prospect`,
+                                          Generate full content stack (Session 2)
+  node src/index.js prospect --company ... --domain ... --city ... --niche ...
+                                          End-to-end: Session 1 + Session 2 in one command`,
     );
     process.exit(1);
   }
@@ -183,6 +252,11 @@ async function main() {
 
   if (cmd === "content") {
     await runContent(rest);
+    return;
+  }
+
+  if (cmd === "prospect") {
+    await runProspect(rest);
     return;
   }
 

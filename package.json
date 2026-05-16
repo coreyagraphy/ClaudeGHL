@@ -10,7 +10,8 @@
     "ghl:automation": "node src/index.js automation",
     "ghl:all": "node src/index.js all",
     "research": "node src/index.js research",
-    "content": "node src/index.js content"
+    "content": "node src/index.js content",
+    "prospect": "node src/index.js prospect"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
