@@ -19,6 +19,18 @@ function offerPrice(assignedOffer) {
   return null;
 }
 
+// String(undefined) === "undefined" — which the cf helper would happily push
+// to GHL as a custom field with the literal text "undefined". Use this for
+// boolean-ish fields where we want null (omit) for missing data.
+function boolToString(v) {
+  if (v === undefined || v === null) return null;
+  return String(v);
+}
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function joinPainPoints(painPoints) {
   if (!Array.isArray(painPoints)) return "";
   return painPoints
@@ -43,7 +55,7 @@ function buildCustomFields({ research, score, assignedOffer, painPoints, firstFi
 
     // --- Identity / firmographic ---
     cf("company_domain", research.research_object?.domain),
-    cf("domain_verified", String(research.research_object?.domain_verified)),
+    cf("domain_verified", boolToString(research.research_object?.domain_verified)),
     cf("owner_first_name", research.research_object?.owner_first),
     cf("owner_full_name", research.research_object?.owner_name),
     cf("primary_email_source", research.research_object?.email_source),
@@ -56,7 +68,7 @@ function buildCustomFields({ research, score, assignedOffer, painPoints, firstFi
     // --- AI infrastructure signals ---
     cf("schema_types_present", (research.research_object?.schema_types_present || []).join(",")),
     cf("ai_bots_blocked", research.research_object?.ai_bots_blocked),
-    cf("llms_txt_present", String(research.research_object?.llms_txt_present)),
+    cf("llms_txt_present", boolToString(research.research_object?.llms_txt_present)),
     cf("social_platforms_active", research.research_object?.social_platforms_active),
     cf("content_freshness_months", research.research_object?.content_freshness_months),
     cf("last_content_date", research.research_object?.last_content_date),
@@ -129,7 +141,7 @@ export function buildContactPayload({ research, score, assignedOffer, painPoints
   const payload = {
     firstName: ro.owner_first || undefined,
     lastName: ro.owner_name && ro.owner_first
-      ? ro.owner_name.replace(new RegExp(`^${ro.owner_first}\\s*`, "i"), "").trim() || undefined
+      ? ro.owner_name.replace(new RegExp(`^${escapeRegex(ro.owner_first)}\\s*`, "i"), "").trim() || undefined
       : undefined,
     name: ro.owner_name || ro.company_name,
     companyName: ro.company_name,
