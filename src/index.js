@@ -7,6 +7,7 @@ import { generateWebsitePrompt } from "./generators/website.js";
 import { generateBusinessOSPrompt } from "./generators/business-os.js";
 import { generateAutomationPrompt } from "./generators/automation.js";
 import { runProspectResearch } from "./research/index.js";
+import { generateContentForProspect } from "./content/index.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -117,6 +118,49 @@ async function runResearch(argv) {
   console.log(`[research] Saved → ${outPath}`);
 }
 
+async function runContent(argv) {
+  const flags = parseFlags(argv);
+  if (!flags.input) {
+    throw new Error(
+      `Missing --input. Usage:\n  node src/index.js content --input output/campaigns/<campaign-id>/research/<slug>.json [--campaign-id <id>]`,
+    );
+  }
+
+  const inputPath = path.resolve(flags.input);
+  const session1Result = JSON.parse(await fs.readFile(inputPath, "utf8"));
+
+  // Default campaign-id from the input path: .../campaigns/<id>/research/<slug>.json
+  const campaignId =
+    flags["campaign-id"] ||
+    path.basename(path.resolve(path.dirname(inputPath), "..")) ||
+    "adhoc";
+
+  console.log(
+    `\n[content] ${session1Result.research_object?.company_name} | campaign=${campaignId}`,
+  );
+  const started = Date.now();
+
+  const result = await generateContentForProspect({
+    session1Result,
+    campaignId,
+  });
+
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+  if (result.skipped) {
+    console.log(`[content] Skipped — ${result.reason}`);
+    return;
+  }
+  console.log(`[content] Done in ${elapsed}s`);
+  console.log(`[content] Bundle → ${result.bundle_path}`);
+  console.log(`[content] Landing page → ${result.bundle.paths.landing_page}`);
+  console.log(
+    `[content] Selected email angle: ${result.bundle.selected_email_angle}`,
+  );
+  console.log(
+    `[content] NOTE: landing_page_url is null until a deploy step runs.`,
+  );
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   if (!cmd) {
@@ -125,13 +169,20 @@ async function main() {
   node src/index.js <ghl-target>          Generate one GHL prompt
     targets: ${Object.keys(GHL_TARGETS).join(", ")}, all
   node src/index.js research --company ... --domain ... --city ... --niche ...
-                                          Research + score one prospect`,
+                                          Research + score one prospect
+  node src/index.js content --input <session-1-json> [--campaign-id <id>]
+                                          Generate full content stack for one prospect`,
     );
     process.exit(1);
   }
 
   if (cmd === "research") {
     await runResearch(rest);
+    return;
+  }
+
+  if (cmd === "content") {
+    await runContent(rest);
     return;
   }
 
