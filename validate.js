@@ -218,6 +218,51 @@ const skip = await generateContentForProspect({
 check("orchestrator skips when content_eligible=false", skip.skipped === true);
 check("orchestrator skip reason includes status", skip.reason?.includes("low_confidence"));
 
+// ---- Visuals router: keyword + intent matching (no LLM) ----
+
+import { routeVideoModelSync, VIDEO_MODELS, VIDEO_INTENTS } from "./src/visuals/router.js";
+
+const routerCases = [
+  { intent: "cinematic_hero", expect: VIDEO_MODELS.higgsfield_studio_video },
+  { intent: "social_ugc", expect: VIDEO_MODELS.seedance_2_0 },
+  { intent: "talking_head", expect: VIDEO_MODELS.kling_3_0 },
+];
+for (const c of routerCases) {
+  const r = routeVideoModelSync({ prompt: "", intent: c.intent });
+  check(`router: intent=${c.intent} → ${c.expect}`, r.model === c.expect, `got ${r.model}`);
+}
+
+const kwCases = [
+  {
+    prompt: "Slow cinematic dolly push through a tracking shot of the warehouse",
+    expect: VIDEO_MODELS.higgsfield_studio_video,
+  },
+  {
+    prompt: "Vertical 9:16 UGC selfie phone shot for TikTok",
+    expect: VIDEO_MODELS.seedance_2_0,
+  },
+];
+for (const c of kwCases) {
+  const r = routeVideoModelSync({ prompt: c.prompt });
+  check(
+    `router: keyword "${c.prompt.slice(0, 30)}…" → ${c.expect}`,
+    r.model === c.expect,
+    `got ${r.model} (${r.classifier})`,
+  );
+}
+
+const defaultRoute = routeVideoModelSync({ prompt: "some neutral text with no signals" });
+check(
+  `router: empty signal defaults to higgsfield_studio_video`,
+  defaultRoute.model === VIDEO_MODELS.higgsfield_studio_video,
+  `got ${defaultRoute.model}`,
+);
+
+check(
+  `router: VIDEO_INTENTS exports all three intents`,
+  VIDEO_INTENTS.length === 3 && VIDEO_INTENTS.includes("cinematic_hero"),
+);
+
 // ---- Schema sanity: every JSON schema uses additionalProperties:false on objects ----
 
 import { readFileSync } from "node:fs";
@@ -239,6 +284,8 @@ const schemaFiles = [
   "./src/content/email.js",
   "./src/content/meta-ads.js",
   "./src/content/social-posts.js",
+  "./src/visuals/router.js",
+  "./src/visuals/prompts.js",
 ];
 for (const f of schemaFiles) {
   const r = fileHasAdditionalPropsFalse(f);

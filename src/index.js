@@ -8,6 +8,8 @@ import { generateBusinessOSPrompt } from "./generators/business-os.js";
 import { generateAutomationPrompt } from "./generators/automation.js";
 import { runProspectResearch } from "./research/index.js";
 import { generateContentForProspect } from "./content/index.js";
+import { generateVisualsForProspect, pollPendingVideo } from "./visuals/index.js";
+import { routeVideoModel } from "./visuals/router.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -228,6 +230,66 @@ async function runProspect(argv) {
   console.log(`\n[prospect] Done in ${totalElapsed}s total.`);
 }
 
+async function runVisuals(argv) {
+  const flags = parseFlags(argv);
+  if (!flags.input) {
+    throw new Error(
+      `Missing --input. Usage:\n  node src/index.js visuals --input output/campaigns/<id>/research/<slug>.json [--campaign-id <id>] [--intent cinematic_hero|social_ugc|talking_head] [--mode sync|async]`,
+    );
+  }
+  const session1 = JSON.parse(await fs.readFile(flags.input, "utf8"));
+  const campaignId = flags["campaign-id"] || session1.campaign_id || "adhoc";
+  const intent = flags.intent || "cinematic_hero";
+  const mode = flags.mode || "sync";
+
+  console.log(
+    `\n[visuals] ${session1.research_object.business} | campaign=${campaignId} intent=${intent} mode=${mode}`,
+  );
+  const started = Date.now();
+
+  const result = await generateVisualsForProspect({
+    session1Result: session1,
+    campaignId,
+    videoIntent: intent,
+    videoMode: mode,
+  });
+
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(`[visuals] Done in ${elapsed}s`);
+  console.log(`[visuals]   ↳ Image → ${result.manifest.image.local_path}`);
+  console.log(
+    `[visuals]   ↳ Video model=${result.manifest.video.model} (${result.manifest.video.router_classifier}, conf=${result.manifest.video.router_confidence})`,
+  );
+  console.log(`[visuals]   ↳ Video rationale: ${result.manifest.video.router_rationale}`);
+  if (mode === "async") {
+    console.log(`[visuals]   ↳ Video job kicked off: ${result.manifest.video.job_id}`);
+  } else {
+    console.log(`[visuals]   ↳ Video → ${result.manifest.video.local_path}`);
+  }
+  console.log(`[visuals]   ↳ Manifest → ${result.manifest_path}`);
+}
+
+async function runPollVideo(argv) {
+  const flags = parseFlags(argv);
+  if (!flags["job-id"]) {
+    throw new Error(`Missing --job-id. Usage:\n  node src/index.js poll-video --job-id <id>`);
+  }
+  console.log(`\n[poll-video] Polling job ${flags["job-id"]}…`);
+  const result = await pollPendingVideo({ jobId: flags["job-id"] });
+  console.log(`[poll-video] Done. URL: ${result.url}`);
+}
+
+async function runRouteVideo(argv) {
+  const flags = parseFlags(argv);
+  if (!flags.prompt) {
+    throw new Error(
+      `Missing --prompt. Usage:\n  node src/index.js route-video --prompt "<text>" [--intent cinematic_hero|social_ugc|talking_head]`,
+    );
+  }
+  const r = await routeVideoModel({ prompt: flags.prompt, intent: flags.intent });
+  console.log(JSON.stringify(r, null, 2));
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   if (!cmd) {
@@ -240,7 +302,13 @@ async function main() {
   node src/index.js content --input <session-1-json> [--campaign-id <id>]
                                           Generate full content stack (Session 2)
   node src/index.js prospect --company ... --domain ... --city ... --niche ...
-                                          End-to-end: Session 1 + Session 2 in one command`,
+                                          End-to-end: Session 1 + Session 2 in one command
+  node src/index.js visuals --input <session-1-json> [--intent cinematic_hero|social_ugc|talking_head] [--mode sync|async]
+                                          Generate image + video for one prospect (Session 3)
+  node src/index.js poll-video --job-id <id>
+                                          Poll an async video job until ready
+  node src/index.js route-video --prompt "<text>" [--intent ...]
+                                          Test the video model router (no generation)`,
     );
     process.exit(1);
   }
@@ -257,6 +325,21 @@ async function main() {
 
   if (cmd === "prospect") {
     await runProspect(rest);
+    return;
+  }
+
+  if (cmd === "visuals") {
+    await runVisuals(rest);
+    return;
+  }
+
+  if (cmd === "poll-video") {
+    await runPollVideo(rest);
+    return;
+  }
+
+  if (cmd === "route-video") {
+    await runRouteVideo(rest);
     return;
   }
 
