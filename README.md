@@ -30,6 +30,9 @@ For ingestion into GoHighLevel, also set `GHL_API_KEY`, `GHL_LOCATION_ID`, the t
 ## Quick tour
 
 ```bash
+# Verify env + backend + GHL connectivity in 5 seconds before any real run
+node src/index.js doctor
+
 # Generate the 3 GHL infrastructure prompts (run once per workspace)
 npm run ghl:all
 

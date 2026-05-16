@@ -10,6 +10,8 @@ function getBackend() {
   return process.env.ANTHROPIC_API_KEY ? "api" : "claude-cli";
 }
 
+export { getBackend };
+
 export function getClient() {
   if (!client) {
     if (!process.env.ANTHROPIC_API_KEY) {

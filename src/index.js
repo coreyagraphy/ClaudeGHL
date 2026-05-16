@@ -13,6 +13,7 @@ import { routeVideoModel } from "./visuals/router.js";
 import { ingestProspect } from "./ghl/ingest.js";
 import { runBatch } from "./batch/index.js";
 import { generateCampaignReport } from "./report/index.js";
+import { runDoctor } from "./doctor/index.js";
 
 const GHL_OUTPUT_DIR = "output/ghl_prompts";
 const CAMPAIGN_OUTPUT_DIR = "output/campaigns";
@@ -392,7 +393,8 @@ async function main() {
                           [--concurrency 3] [--steps research,content,visuals,ingest] [--force] [--live-ingest]
                                           Run all sessions over a list of prospects (Session 5)
   node src/index.js report --campaign-id <id>
-                                          Aggregate one campaign and write a Markdown report (Session 6)`,
+                                          Aggregate one campaign and write a Markdown report (Session 6)
+  node src/index.js doctor                Preflight: verify env, backend, GHL connectivity, output paths`,
     );
     process.exit(1);
   }
@@ -440,6 +442,11 @@ async function main() {
   if (cmd === "report") {
     await runReportCmd(rest);
     return;
+  }
+
+  if (cmd === "doctor") {
+    const code = await runDoctor();
+    process.exit(code);
   }
 
   if (cmd === "all") {
