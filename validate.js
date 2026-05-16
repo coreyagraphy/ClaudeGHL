@@ -223,9 +223,9 @@ check("orchestrator skip reason includes status", skip.reason?.includes("low_con
 import { routeVideoModelSync, VIDEO_MODELS, VIDEO_INTENTS } from "./src/visuals/router.js";
 
 const routerCases = [
-  { intent: "cinematic_hero", expect: VIDEO_MODELS.higgsfield_studio_video },
+  { intent: "cinematic_hero", expect: VIDEO_MODELS.cinematic_studio_3_0 },
   { intent: "social_ugc", expect: VIDEO_MODELS.seedance_2_0 },
-  { intent: "talking_head", expect: VIDEO_MODELS.kling_3_0 },
+  { intent: "talking_head", expect: VIDEO_MODELS.kling3_0 },
 ];
 for (const c of routerCases) {
   const r = routeVideoModelSync({ prompt: "", intent: c.intent });
@@ -235,7 +235,7 @@ for (const c of routerCases) {
 const kwCases = [
   {
     prompt: "Slow cinematic dolly push through a tracking shot of the warehouse",
-    expect: VIDEO_MODELS.higgsfield_studio_video,
+    expect: VIDEO_MODELS.cinematic_studio_3_0,
   },
   {
     prompt: "Vertical 9:16 UGC selfie phone shot for TikTok",
@@ -253,8 +253,8 @@ for (const c of kwCases) {
 
 const defaultRoute = routeVideoModelSync({ prompt: "some neutral text with no signals" });
 check(
-  `router: empty signal defaults to higgsfield_studio_video`,
-  defaultRoute.model === VIDEO_MODELS.higgsfield_studio_video,
+  `router: empty signal defaults to cinematic_studio_3_0`,
+  defaultRoute.model === VIDEO_MODELS.cinematic_studio_3_0,
   `got ${defaultRoute.model}`,
 );
 
