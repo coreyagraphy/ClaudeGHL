@@ -70,6 +70,9 @@ async function gatherCampaign({ campaignId, outputRoot = "output/campaigns" }) {
       has_content: !!contentBundle,
       has_visuals: !!visualsManifest,
       video_job_id: visualsManifest?.video?.job_id || null,
+      // local_path is set when sync video download succeeded; null when an
+      // async job was kicked off and not yet polled to completion.
+      video_local_path: visualsManifest?.video?.local_path || null,
       usage_content: contentBundle?.usage || null,
     });
   }
@@ -128,7 +131,10 @@ function summarize(gathered) {
     avg_score: scored ? Math.round((totalScore / scored) * 10) / 10 : null,
     by_tier: byTier,
     by_band: byScoreBand,
-    pending_visuals: prospects.filter((p) => p.video_job_id && !p.has_visuals).length,
+    // Async video job kicked off (manifest exists, has a job_id) but the
+    // file isn't on disk yet (poll-video hasn't been run, or it's still
+    // queued/processing).
+    pending_visuals: prospects.filter((p) => p.video_job_id && !p.video_local_path).length,
     content_generated: prospects.filter((p) => p.has_content).length,
     visuals_generated: prospects.filter((p) => p.has_visuals).length,
     pain_themes: keywordCounts,
